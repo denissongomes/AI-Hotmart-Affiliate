@@ -139,7 +139,9 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
             if not email_found:
                 print("Não foi possível localizar o campo de email no formulário (seletores testados).")
                 if screenshot_on_failure and screenshots_dir is not None:
-                    _save_screenshot(page, screenshots_dir, 'missing_email')
+                    saved = _save_screenshot(page, screenshots_dir, 'missing_email')
+                    if saved:
+                        print(f"Screenshot de debug salva em: {saved}")
                 browser.close()
                 return False
 
@@ -156,7 +158,9 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
             if not password_found:
                 print("Não foi possível localizar o campo de senha no formulário (seletores testados).")
                 if screenshot_on_failure and screenshots_dir is not None:
-                    _save_screenshot(page, screenshots_dir, 'missing_password')
+                    saved = _save_screenshot(page, screenshots_dir, 'missing_password')
+                    if saved:
+                        print(f"Screenshot de debug salva em: {saved}")
                 browser.close()
                 return False
 
@@ -179,7 +183,9 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
                 except Exception:
                     # se não der, tenta screenshot e falha
                     if screenshot_on_failure and screenshots_dir is not None:
-                        _save_screenshot(page, screenshots_dir, 'submit_failed')
+                        saved = _save_screenshot(page, screenshots_dir, 'submit_failed')
+                        if saved:
+                            print(f"Screenshot de debug salva em: {saved}")
                     print("Não foi possível submeter o formulário.")
                     browser.close()
                     return False
@@ -217,11 +223,12 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
             if screenshot_on_failure and screenshots_dir is not None:
                 saved = _save_screenshot(page, screenshots_dir, 'login_failed')
                 if saved:
+                    print(f"Screenshot de debug salva em: {saved}")
                     # registra ação simples no actions.log
                     try:
                         actions_log = Path(__file__).resolve().parent / '.history' / task_id / 'actions.log'
                         with open(actions_log, 'a', encoding='utf-8') as al:
-                            al.write('{"task_id":"' + task_id + '","timestamp":"' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') + '","type":"screenshot","file":"' + str(saved).replace('\\\\','/') + '"}\n')
+                            al.write('{"task_id":"' + task_id + '","timestamp":"' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') + '","type":"screenshot","file":"' + str(saved).replace('\\','/') + '"}\n')
                     except Exception:
                         pass
             browser.close()
@@ -234,10 +241,11 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
             if screenshot_on_failure and 'page' in locals() and screenshots_dir is not None:
                 saved = _save_screenshot(page, screenshots_dir, 'exception')
                 if saved:
+                    print(f"Screenshot de debug salva em: {saved}")
                     try:
                         actions_log = Path(__file__).resolve().parent / '.history' / task_id / 'actions.log'
                         with open(actions_log, 'a', encoding='utf-8') as al:
-                            al.write('{"task_id":"' + task_id + '","timestamp":"' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') + '","type":"screenshot_exception","file":"' + str(saved).replace('\\\\','/') + '"}\n')
+                            al.write('{"task_id":"' + task_id + '","timestamp":"' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') + '","type":"screenshot_exception","file":"' + str(saved).replace('\\','/') + '"}\n')
                     except Exception:
                         pass
         except Exception as e:
