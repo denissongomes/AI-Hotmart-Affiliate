@@ -7,6 +7,14 @@ from datetime import datetime, timezone
 import argparse
 import json
 from typing import Optional
+import sys
+
+# Tenta forçar stdout para UTF-8 para melhorar exibição de acentos no Windows
+try:
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 
 
 def _write_summary_entry(entry: dict):
@@ -135,6 +143,62 @@ def _update_task_json(task_id: str, updates: dict):
         pass
 
 
+def _read_summary_entries() -> list:
+    """Lê `.history/summary.log` e retorna uma lista de objetos JSON (linhas ignoradas se inválidas)."""
+    entries = []
+    try:
+        root = Path(__file__).resolve().parent
+        summary = root / '.history' / 'summary.log'
+        if not summary.exists():
+            return entries
+        with open(summary, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    entries.append(obj)
+                except Exception:
+                    # ignore malformed lines
+                    continue
+    except Exception:
+        pass
+    return entries
+
+
+def _print_summary_entries(entries: list, task_id: Optional[str] = None):
+    """Imprime entries de maneira legível. Se task_id fornecido, filtra apenas essa task."""
+    if task_id:
+        entries = [e for e in entries if e.get('task_id') == task_id]
+
+    if not entries:
+        print('Nenhuma task encontrada em .history/summary.log')
+        return
+
+    for e in entries:
+        tid = e.get('task_id')
+        title = e.get('title', '')
+        status = e.get('status', e.get('outcome', ''))
+        start = e.get('start_time') or e.get('date')
+        end = e.get('end_time')
+        duration = e.get('duration_seconds')
+        print('---')
+        print(f'Task ID : {tid}')
+        print(f'Title   : {title}')
+        print(f'Status  : {status}')
+        if start:
+            print(f'Start   : {start}')
+        if end:
+            print(f'End     : {end}')
+        if duration is not None:
+            print(f'Duration: {duration} s')
+        desc = e.get('description')
+        if desc:
+            print(f'Desc    : {desc}')
+    print('---')
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Executa o login na Hotmart usando credenciais em .env")
     group = parser.add_mutually_exclusive_group()
@@ -143,7 +207,14 @@ if __name__ == "__main__":
     parser.set_defaults(headless=True)
     parser.add_argument('--timeout', type=int, default=20, help='Timeout em segundos para operações do navegador')
     parser.add_argument('--task-id', type=str, default=None, help='Task ID para logs/screenshots (gerado automaticamente se omitido)')
+    parser.add_argument('--list-tasks', action='store_true', help='Listar tasks do .history/summary.log de forma legível')
     args = parser.parse_args()
+
+    # Se solicitado, listar tasks e sair
+    if getattr(args, 'list_tasks', False):
+        entries = _read_summary_entries()
+        _print_summary_entries(entries, task_id=args.task_id)
+        exit(0)
 
     # Gerar task_id automaticamente se não fornecido
     auto_generated = False
