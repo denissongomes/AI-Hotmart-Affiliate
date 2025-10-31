@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import argparse
 import json
+from typing import Optional
 
 
 def _write_summary_entry(entry: dict):
@@ -84,6 +85,56 @@ def _generate_task_id(history_root: Path = None) -> str:
     return f"{prefix}{next_n:03d}"
 
 
+def _update_summary_entry(task_id: str, updates: dict):
+    """Update an existing summary.log entry (by task_id) merging updates."""
+    try:
+        root = Path(__file__).resolve().parent
+        summary = root / '.history' / 'summary.log'
+        if not summary.exists():
+            return
+        lines = []
+        changed = False
+        with open(summary, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    lines.append(line)
+                    continue
+                if obj.get('task_id') == task_id:
+                    obj.update(updates)
+                    lines.append(json.dumps(obj, ensure_ascii=False))
+                    changed = True
+                else:
+                    lines.append(json.dumps(obj, ensure_ascii=False))
+        if changed:
+            with open(summary, 'w', encoding='utf-8') as f:
+                for l in lines:
+                    f.write(l + '\n')
+    except Exception:
+        pass
+
+
+def _update_task_json(task_id: str, updates: dict):
+    """Merge updates into .history/<task_id>/task.json"""
+    try:
+        root = Path(__file__).resolve().parent
+        task_file = root / '.history' / task_id / 'task.json'
+        if not task_file.exists():
+            return
+        with open(task_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        data.update(updates)
+        data['updated_at'] = datetime.now(timezone.utc).isoformat()
+        with open(task_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Executa o login na Hotmart usando credenciais em .env")
     group = parser.add_mutually_exclusive_group()
@@ -107,13 +158,45 @@ if __name__ == "__main__":
 
     # Se a task foi gerada automaticamente, registrar no summary.log e criar task.json
     if auto_generated:
-        now_iso = datetime.now(timezone.utc).isoformat()
-        summary_entry = {"date": now_iso, "task_id": args.task_id, "title": "Automated login run", "status": "Pendente"}
+        # marca a task como Em Progresso com start_time
+        start_time = datetime.now(timezone.utc)
+        start_iso = start_time.isoformat()
+        summary_entry = {
+            "date": start_iso,
+            "task_id": args.task_id,
+            "title": "Automated login run",
+            "description": "Task gerada automaticamente para execução de login via script",
+            "start_time": start_iso,
+            "end_time": None,
+            "outcome": None,
+            "duration_seconds": None,
+            "status": "Em Progresso"
+        }
         _write_summary_entry(summary_entry)
         _create_task_json(args.task_id, "Automated login run", "Task gerada automaticamente para execução de login via script")
+        # atualiza task.json para Em Progresso
+        _update_task_json(args.task_id, {"status": "Em Progresso"})
 
     # Executa o login usando as credenciais em .env
+    run_start = datetime.now(timezone.utc)
     success = login(headless=args.headless, timeout=args.timeout, task_id=args.task_id)
+    run_end = datetime.now(timezone.utc)
+    duration = (run_end - run_start).total_seconds()
+
+    # Atualiza summary.log e task.json com resultado
+    end_iso = run_end.isoformat()
+    outcome = "success" if success else "failure"
+    status = "Concluída" if success else "Falha"
+    _update_summary_entry(args.task_id, {"end_time": end_iso, "outcome": outcome, "duration_seconds": duration, "status": status})
+    _update_task_json(args.task_id, {"status": status, "result": outcome})
+    # adiciona linha em actions.log
+    try:
+        actions_log = Path(__file__).resolve().parent / '.history' / args.task_id / 'actions.log'
+        with open(actions_log, 'a', encoding='utf-8') as al:
+            al.write(json.dumps({"task_id": args.task_id, "timestamp": run_end.isoformat(), "type": "run", "outcome": outcome, "duration_seconds": duration}, ensure_ascii=False) + '\n')
+    except Exception:
+        pass
+
     if success:
         print("Login realizado com sucesso.")
     else:
