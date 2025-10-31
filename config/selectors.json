@@ -1,0 +1,32 @@
+{
+  "email_selectors": [
+    "input[type=Email]",
+    "input[type=email]",
+    "input[name=email]",
+    "#email",
+    "input[name=\"username\"]"
+  ],
+  "password_selectors": [
+    "input[type=password]",
+    "input[name=password]",
+    "#password"
+  ],
+  "submit_selectors": [
+    "button[type=submit]",
+    "button:has-text(\"Entrar\")",
+    "button:has-text(\"Login\")",
+    "button.login-button"
+  ],
+  "success_indicators": [
+    "dashboard",
+    "home",
+    "app.hotmart",
+    "go.hotmart"
+  ],
+  "logged_selector_candidates": [
+    ".user-menu",
+    "[data-qa=account-avatar]",
+    "img.profile"
+  ]
+}
+

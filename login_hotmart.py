@@ -19,10 +19,53 @@ from dotenv import load_dotenv
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
+import json
 
 load_dotenv()
 
 HOTMART_LOGIN_URL = "https://sso.hotmart.com/login?passwordless=false&service=https%3A%2F%2Fsso.hotmart.com%2Foauth2.0%2FcallbackAuthorize%3Fclient_id%3D8cef361b-94f8-4679-bd92-9d1cb496452d%26redirect_uri%3Dhttps%253A%252F%252Fapp.hotmart.com%252Fauth%252Flogin%26response_type%3Dcode%26response_mode%3Dquery%26client_name%3DCasOAuthClient"
+
+
+def _load_selectors_config() -> dict:
+    project_root = Path(__file__).resolve().parent
+    config_path = project_root / 'config' / 'selectors.json'
+    defaults = {
+        "email_selectors": [
+            "input[type=Email]",
+            "input[type=email]",
+            "input[name=email]",
+            "#email",
+            "input[name=\"username\"]"
+        ],
+        "password_selectors": [
+            "input[type=password]",
+            "input[name=password]",
+            "#password"
+        ],
+        "submit_selectors": [
+            "button[type=submit]",
+            "button:has-text(\"Entrar\")",
+            "button:has-text(\"Login\")",
+            "button.login-button"
+        ],
+        "success_indicators": ["dashboard", "home", "app.hotmart", "go.hotmart"],
+        "logged_selector_candidates": [".user-menu", "[data-qa=account-avatar]", "img.profile"]
+    }
+    try:
+        if config_path.exists():
+            with open(config_path, 'r', encoding='utf-8') as f:
+                cfg = json.load(f)
+                # merge defaults with cfg (cfg overrides)
+                for k, v in defaults.items():
+                    if k not in cfg:
+                        cfg[k] = v
+                return cfg
+    except Exception as e:
+        print("Falha ao carregar config/selectors.json, usando defaults:", e)
+    return defaults
+
+# carrega uma vez
+_SELECTORS_CFG = _load_selectors_config()
 
 
 def _ensure_screenshot_dir(task_id: str) -> Path:
@@ -84,38 +127,42 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
             page.goto(HOTMART_LOGIN_URL, timeout=timeout * 1000)
 
             # Preencher email
-            # Observação: os seletores podem mudar. Ajuste se necessário.
-            try:
-                page.fill("input[type=Email], input[type=email], input[name=email]", email)
-            except Exception:
-                # Tenta por id/name conhecidos
-                if page.query_selector('#email'):
-                    page.fill('#email', email)
-                elif page.query_selector('input[name="username"]'):
-                    page.fill('input[name="username"]', email)
-                else:
-                    print("Não foi possível localizar o campo de email no formulário.")
-                    if screenshot_on_failure and screenshots_dir is not None:
-                        _save_screenshot(page, screenshots_dir, 'missing_email')
-                    browser.close()
-                    return False
+            email_found = False
+            for sel in _SELECTORS_CFG.get('email_selectors', []):
+                try:
+                    if page.query_selector(sel):
+                        page.fill(sel, email)
+                        email_found = True
+                        break
+                except Exception:
+                    continue
+            if not email_found:
+                print("Não foi possível localizar o campo de email no formulário (seletores testados).")
+                if screenshot_on_failure and screenshots_dir is not None:
+                    _save_screenshot(page, screenshots_dir, 'missing_email')
+                browser.close()
+                return False
 
             # Preencher senha
-            try:
-                page.fill("input[type=password], input[name=password]", password)
-            except Exception:
-                if page.query_selector('#password'):
-                    page.fill('#password', password)
-                else:
-                    print("Não foi possível localizar o campo de senha no formulário.")
-                    if screenshot_on_failure and screenshots_dir is not None:
-                        _save_screenshot(page, screenshots_dir, 'missing_password')
-                    browser.close()
-                    return False
+            password_found = False
+            for sel in _SELECTORS_CFG.get('password_selectors', []):
+                try:
+                    if page.query_selector(sel):
+                        page.fill(sel, password)
+                        password_found = True
+                        break
+                except Exception:
+                    continue
+            if not password_found:
+                print("Não foi possível localizar o campo de senha no formulário (seletores testados).")
+                if screenshot_on_failure and screenshots_dir is not None:
+                    _save_screenshot(page, screenshots_dir, 'missing_password')
+                browser.close()
+                return False
 
             # Submeter o formulário: tenta clicar no botão de login
             clicked = False
-            for sel in ["button[type=submit]", "button:has-text(\"Entrar\")", "button:has-text(\"Login\")", "button.login-button"]:
+            for sel in _SELECTORS_CFG.get('submit_selectors', []):
                 try:
                     btn = page.query_selector(sel)
                     if btn:
@@ -150,13 +197,13 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
             print(f"URL atual após submissão: {current_url}")
 
             # Heurística simples: se mudou para sso.hotmart.com/ ou contém 'dashboard' ou 'home'
-            success_indicators = ["dashboard", "home", "app.hotmart", "go.hotmart"]
+            success_indicators = _SELECTORS_CFG.get('success_indicators', ["dashboard", "home", "app.hotmart", "go.hotmart"])
             if any(ind in current_url for ind in success_indicators):
                 browser.close()
                 return True
 
             # Ou verificar se existe algum elemento que apareça quando logado
-            logged_selector_candidates = [".user-menu", "[data-qa=account-avatar]", "img.profile"]
+            logged_selector_candidates = _SELECTORS_CFG.get('logged_selector_candidates', [".user-menu", "[data-qa=account-avatar]", "img.profile"])
             for s in logged_selector_candidates:
                 try:
                     if page.query_selector(s):
@@ -168,7 +215,15 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
             # Falha: salvar screenshot para debug
             print("Não detectado sucesso no login. Verifique credenciais e seletores.")
             if screenshot_on_failure and screenshots_dir is not None:
-                _save_screenshot(page, screenshots_dir, 'login_failed')
+                saved = _save_screenshot(page, screenshots_dir, 'login_failed')
+                if saved:
+                    # registra ação simples no actions.log
+                    try:
+                        actions_log = Path(__file__).resolve().parent / '.history' / task_id / 'actions.log'
+                        with open(actions_log, 'a', encoding='utf-8') as al:
+                            al.write('{"task_id":"' + task_id + '","timestamp":"' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') + '","type":"screenshot","file":"' + str(saved).replace('\\\\','/') + '"}\n')
+                    except Exception:
+                        pass
             browser.close()
             return False
 
@@ -177,7 +232,14 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
         # tenta salvar screenshot se houver página disponível
         try:
             if screenshot_on_failure and 'page' in locals() and screenshots_dir is not None:
-                _save_screenshot(page, screenshots_dir, 'exception')
+                saved = _save_screenshot(page, screenshots_dir, 'exception')
+                if saved:
+                    try:
+                        actions_log = Path(__file__).resolve().parent / '.history' / task_id / 'actions.log'
+                        with open(actions_log, 'a', encoding='utf-8') as al:
+                            al.write('{"task_id":"' + task_id + '","timestamp":"' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') + '","type":"screenshot_exception","file":"' + str(saved).replace('\\\\','/') + '"}\n')
+                    except Exception:
+                        pass
         except Exception as e:
             print("Falha ao capturar screenshot da exceção:", e)
         return False
