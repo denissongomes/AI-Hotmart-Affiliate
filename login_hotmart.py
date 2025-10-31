@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-HOTMART_LOGIN_URL = "https://sso.hotmart.com/login?passwordless=false"
+HOTMART_LOGIN_URL = "https://sso.hotmart.com/login?passwordless=false&service=https%3A%2F%2Fsso.hotmart.com%2Foauth2.0%2FcallbackAuthorize%3Fclient_id%3D8cef361b-94f8-4679-bd92-9d1cb496452d%26redirect_uri%3Dhttps%253A%252F%252Fapp.hotmart.com%252Fauth%252Flogin%26response_type%3Dcode%26response_mode%3Dquery%26client_name%3DCasOAuthClient"
 
 
 def login(headless: bool = True, timeout: int = 20) -> bool:
