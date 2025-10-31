@@ -1,0 +1,35 @@
+{
+  "task_id": "TASK-20251031-001",
+  "title": "Adicionar script de login Hotmart e arquivos auxiliares",
+  "description": "Limpeza e criação de script de login, configuração e histórico (.history)",
+  "created_at": "2025-10-31T12:00:00Z",
+  "updated_at": "2025-10-31T12:00:00Z",
+  "status": "Concluída",
+  "context_snapshot": {
+    "project_root": "c:\\Users\\denis\\Github\\AI-Hotmart-Affiliate",
+    "dependencies": {
+      "python-dotenv": ">=1.0.0",
+      "playwright": ">=1.40.0"
+    },
+    "env_variables_expected": [
+      "HOTMART_EMAIL",
+      "HOTMART_PASSWORD"
+    ],
+    "files_snapshot": {
+      "main.py": "updated",
+      "login_hotmart.py": "created",
+      "requirements.txt": "created",
+      ".env.example": "created",
+      "README.md": "created"
+    }
+  },
+  "actions": [
+    {"timestamp": "2025-10-31T11:50:00Z", "type": "file_edit", "description": "Atualizado main.py para chamar login() a partir de login_hotmart.py", "file": "main.py", "output": "OK"},
+    {"timestamp": "2025-10-31T11:51:00Z", "type": "file_create", "description": "Criado login_hotmart.py com automação Playwright", "file": "login_hotmart.py", "output": "OK"},
+    {"timestamp": "2025-10-31T11:52:00Z", "type": "file_create", "description": "Criado requirements.txt, .env.example e README.md", "files": ["requirements.txt", ".env.example", "README.md"], "output": "OK"}
+  ],
+  "decisions": [],
+  "next_steps": "Rodar pip install -r requirements.txt e playwright install; testar login localmente e ajustar seletores se necessário",
+  "summary": "Task reconstruída a partir de summary.log e actions.log"
+}
+
