@@ -89,6 +89,25 @@ def _save_screenshot(page, screenshots_dir: Path, prefix: str) -> Optional[Path]
         return None
 
 
+def _append_action_to_task(task_id: str, action: dict):
+    """Append an action entry to .history/<task_id>/task.json (silent on failure)."""
+    try:
+        root = Path(__file__).resolve().parent
+        task_file = root / '.history' / task_id / 'task.json'
+        if not task_file.exists():
+            return
+        with open(task_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        actions = data.get('actions', [])
+        actions.append(action)
+        data['actions'] = actions
+        data['updated_at'] = datetime.now(timezone.utc).isoformat()
+        with open(task_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
 def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool = True, task_id: str = "TASK-20251031-001") -> bool:
     """Tenta logar na Hotmart usando credenciais do .env.
 
@@ -142,6 +161,7 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
                     saved = _save_screenshot(page, screenshots_dir, 'missing_email')
                     if saved:
                         print(f"Screenshot de debug salva em: {saved}")
+                        _append_action_to_task(task_id, {"timestamp": datetime.now(timezone.utc).isoformat(), "type": "screenshot", "reason": "missing_email", "file": str(saved)})
                 browser.close()
                 return False
 
@@ -161,6 +181,7 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
                     saved = _save_screenshot(page, screenshots_dir, 'missing_password')
                     if saved:
                         print(f"Screenshot de debug salva em: {saved}")
+                        _append_action_to_task(task_id, {"timestamp": datetime.now(timezone.utc).isoformat(), "type": "screenshot", "reason": "missing_password", "file": str(saved)})
                 browser.close()
                 return False
 
@@ -186,6 +207,7 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
                         saved = _save_screenshot(page, screenshots_dir, 'submit_failed')
                         if saved:
                             print(f"Screenshot de debug salva em: {saved}")
+                            _append_action_to_task(task_id, {"timestamp": datetime.now(timezone.utc).isoformat(), "type": "screenshot", "reason": "submit_failed", "file": str(saved)})
                     print("Não foi possível submeter o formulário.")
                     browser.close()
                     return False
@@ -205,6 +227,8 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
             # Heurística simples: se mudou para sso.hotmart.com/ ou contém 'dashboard' ou 'home'
             success_indicators = _SELECTORS_CFG.get('success_indicators', ["dashboard", "home", "app.hotmart", "go.hotmart"])
             if any(ind in current_url for ind in success_indicators):
+                # registra ação de sucesso
+                _append_action_to_task(task_id, {"timestamp": datetime.now(timezone.utc).isoformat(), "type": "login_success", "url": current_url})
                 browser.close()
                 return True
 
@@ -213,6 +237,7 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
             for s in logged_selector_candidates:
                 try:
                     if page.query_selector(s):
+                        _append_action_to_task(task_id, {"timestamp": datetime.now(timezone.utc).isoformat(), "type": "login_success", "detected_by": s, "url": page.url})
                         browser.close()
                         return True
                 except Exception:
@@ -231,6 +256,8 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
                             al.write('{"task_id":"' + task_id + '","timestamp":"' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') + '","type":"screenshot","file":"' + str(saved).replace('\\','/') + '"}\n')
                     except Exception:
                         pass
+                    # adiciona ação ao task.json
+                    _append_action_to_task(task_id, {"timestamp": datetime.now(timezone.utc).isoformat(), "type": "screenshot", "reason": "login_failed", "file": str(saved)})
             browser.close()
             return False
 
@@ -248,6 +275,7 @@ def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool 
                             al.write('{"task_id":"' + task_id + '","timestamp":"' + datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') + '","type":"screenshot_exception","file":"' + str(saved).replace('\\','/') + '"}\n')
                     except Exception:
                         pass
+                    _append_action_to_task(task_id, {"timestamp": datetime.now(timezone.utc).isoformat(), "type": "screenshot_exception", "file": str(saved)})
         except Exception as e:
             print("Falha ao capturar screenshot da exceção:", e)
         return False
