@@ -16,13 +16,37 @@ Observações:
 from os import getenv
 from time import sleep
 from dotenv import load_dotenv
+from pathlib import Path
+from datetime import datetime, timezone
+from typing import Optional
 
 load_dotenv()
 
 HOTMART_LOGIN_URL = "https://sso.hotmart.com/login?passwordless=false&service=https%3A%2F%2Fsso.hotmart.com%2Foauth2.0%2FcallbackAuthorize%3Fclient_id%3D8cef361b-94f8-4679-bd92-9d1cb496452d%26redirect_uri%3Dhttps%253A%252F%252Fapp.hotmart.com%252Fauth%252Flogin%26response_type%3Dcode%26response_mode%3Dquery%26client_name%3DCasOAuthClient"
 
 
-def login(headless: bool = True, timeout: int = 20) -> bool:
+def _ensure_screenshot_dir(task_id: str) -> Path:
+    project_root = Path(__file__).resolve().parent
+    screenshots_dir = project_root / '.history' / task_id / 'screenshots'
+    screenshots_dir.mkdir(parents=True, exist_ok=True)
+    return screenshots_dir
+
+
+def _save_screenshot(page, screenshots_dir: Path, prefix: str) -> Optional[Path]:
+    try:
+        # usa timezone-aware UTC
+        ts = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+        filename = f"{prefix}_{ts}.png"
+        path = screenshots_dir / filename
+        page.screenshot(path=str(path), full_page=True)
+        print(f"Screenshot salva: {path}")
+        return path
+    except Exception as e:
+        print("Falha ao salvar screenshot:", e)
+        return None
+
+
+def login(headless: bool = True, timeout: int = 20, screenshot_on_failure: bool = True, task_id: str = "TASK-20251031-001") -> bool:
     """Tenta logar na Hotmart usando credenciais do .env.
 
     Retorna True se o login parecer bem-sucedido, False caso contrário.
@@ -33,6 +57,14 @@ def login(headless: bool = True, timeout: int = 20) -> bool:
     if not email or not password:
         print("Faltam HOTMART_EMAIL ou HOTMART_PASSWORD no .env")
         return False
+
+    screenshots_dir = None
+    if screenshot_on_failure:
+        try:
+            screenshots_dir = _ensure_screenshot_dir(task_id)
+        except Exception as e:
+            print("Não foi possível criar pasta de screenshots:", e)
+            screenshots_dir = None
 
     # Lazy import para evitar exigir playwright se ainda não instalado
     try:
@@ -63,6 +95,8 @@ def login(headless: bool = True, timeout: int = 20) -> bool:
                     page.fill('input[name="username"]', email)
                 else:
                     print("Não foi possível localizar o campo de email no formulário.")
+                    if screenshot_on_failure and screenshots_dir is not None:
+                        _save_screenshot(page, screenshots_dir, 'missing_email')
                     browser.close()
                     return False
 
@@ -74,6 +108,8 @@ def login(headless: bool = True, timeout: int = 20) -> bool:
                     page.fill('#password', password)
                 else:
                     print("Não foi possível localizar o campo de senha no formulário.")
+                    if screenshot_on_failure and screenshots_dir is not None:
+                        _save_screenshot(page, screenshots_dir, 'missing_password')
                     browser.close()
                     return False
 
@@ -91,7 +127,15 @@ def login(headless: bool = True, timeout: int = 20) -> bool:
 
             if not clicked:
                 # Tenta enviar Enter no campo de senha
-                page.press('input[type=password]', 'Enter')
+                try:
+                    page.press('input[type=password]', 'Enter')
+                except Exception:
+                    # se não der, tenta screenshot e falha
+                    if screenshot_on_failure and screenshots_dir is not None:
+                        _save_screenshot(page, screenshots_dir, 'submit_failed')
+                    print("Não foi possível submeter o formulário.")
+                    browser.close()
+                    return False
 
             # Aguardar navegação/indicador de sucesso
             try:
@@ -121,12 +165,19 @@ def login(headless: bool = True, timeout: int = 20) -> bool:
                 except Exception:
                     continue
 
-            # Falha
+            # Falha: salvar screenshot para debug
             print("Não detectado sucesso no login. Verifique credenciais e seletores.")
+            if screenshot_on_failure and screenshots_dir is not None:
+                _save_screenshot(page, screenshots_dir, 'login_failed')
             browser.close()
             return False
 
     except Exception as exc:
         print("Erro durante a automação:", exc)
+        # tenta salvar screenshot se houver página disponível
+        try:
+            if screenshot_on_failure and 'page' in locals() and screenshots_dir is not None:
+                _save_screenshot(page, screenshots_dir, 'exception')
+        except Exception as e:
+            print("Falha ao capturar screenshot da exceção:", e)
         return False
-
