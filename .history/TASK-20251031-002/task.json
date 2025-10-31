@@ -1,0 +1,19 @@
+{
+  "task_id": "TASK-20251031-002",
+  "title": "Automated login run",
+  "description": "Task gerada automaticamente para execução de login via script",
+  "created_at": "2025-10-31T17:25:51.715678+00:00",
+  "updated_at": "2025-10-31T17:26:43.921908+00:00",
+  "status": "Concluída",
+  "context_snapshot": {},
+  "actions": [
+    {
+      "timestamp": "2025-10-31T17:26:42.364611+00:00",
+      "type": "login_success",
+      "url": "https://sso.hotmart.com/login?passwordless=false&service=https%3A%2F%2Fsso.hotmart.com%2Foauth2.0%2FcallbackAuthorize%3Fclient_id%3D8cef361b-94f8-4679-bd92-9d1cb496452d%26redirect_uri%3Dhttps%253A%252F%252Fapp.hotmart.com%252Fauth%252Flogin%26response_type%3Dcode%26response_mode%3Dquery%26client_name%3DCasOAuthClient"
+    }
+  ],
+  "decisions": [],
+  "next_steps": "",
+  "result": "success"
+}
